@@ -1,0 +1,17 @@
+.dart_tool/
+.packages
+build/
+**/coverage/
+**/.flutter-plugins*
+**/local.properties
+**/.gradle/
+**/ephemeral/
+.env
+*.db
+*.db-shm
+*.db-wal
+*.log
+server/bin/server
+
+__pycache__/
+*.pyc

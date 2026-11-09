@@ -1,0 +1,64 @@
+name: Iteration 01 server and contracts
+on:
+  push:
+    branches: [main, 'feat/**']
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  server:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: erp_test
+          POSTGRES_PASSWORD: erp_test
+          POSTGRES_DB: supermarket_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U erp_test -d supermarket_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://erp_test:erp_test@127.0.0.1:5432/supermarket_test?sslmode=disable
+      TEST_DATABASE_URL: postgresql://erp_test:erp_test@127.0.0.1:5432/supermarket_test?sslmode=disable
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: '3.13.7'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Resolve pinned dependencies
+        run: |
+          for package in packages/core_contracts packages/api_client server; do
+            (cd "$package" && dart pub get --enforce-lockfile)
+          done
+      - name: Formatting and analysis
+        run: |
+          dart format --output=none --set-exit-if-changed packages server
+          for package in packages/core_contracts packages/api_client server; do
+            (cd "$package" && dart analyze)
+          done
+      - name: Migration replay and server integration tests
+        working-directory: server
+        run: |
+          dart run bin/migrate.dart
+          dart run bin/migrate.dart
+          dart test
+      - name: Client and contract tests
+        run: |
+          (cd packages/core_contracts && dart test)
+          (cd packages/api_client && dart test)
+      - name: Validate OpenAPI against actual responses
+        run: |
+          python -m pip install -r tools/requirements-checks.txt
+          python tools/validate_openapi.py
+      - name: Compile server executable
+        working-directory: server
+        run: dart compile exe bin/server.dart -o build/supermarket-server
+      - uses: actions/upload-artifact@v4
+        with:
+          name: supermarket-server-linux
+          path: server/build/supermarket-server
